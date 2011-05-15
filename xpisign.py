@@ -76,7 +76,11 @@ def filekeyfun(name):
     return "%d-%s-%s" % tuple(parts)
 
 class Digests(object):
-    def __init__(self):
+    def __init__(self, algos=["MD5", "SHA1"]):
+        if not all(x in self.__algos for x in algos):
+            raise ValueError("Not all specified algorithms are known")
+
+        self.algos = algos
         self.manifests = []
         self.signatures = []
 
@@ -85,19 +89,23 @@ class Digests(object):
     __manifest_version = "Manifest-Version: 1.0\nCreated-By: xpisign.py (version: %s)\n" % __version__
     __signature_version = "Signature-Version: 1.0\nCreated-By: xpisign.py (version: %s)\n" % __version__
 
-    __algos = [["MD5", md5], ["SHA1", sha1]]
+    __algos = {"MD5": md5, "SHA1": sha1}
 
-    @classmethod
-    def digest(cls, content):
+    def digest(self, content):
         '''
         Generate an ascii content digest according to signtool rules
         @param content
         '''
 
-        rv = "Digest-Algorithms: %s\n" % " ".join(a for a,d in cls.__algos)
-        for a,f in cls.__algos:
-            rv += "%s-Digest: %s\n" % (a, base64(f(content).digest()))
-        return rv
+        def digestline(a):
+            hash = base64(self.__algos[a](content).digest())
+            return "%s-Digest: %s\n" % (a, hash)
+
+        rv = []
+        if len(self.algos) > 1:
+            rv += "Digest-Algorithms: %s\n" % " ".join(self.algos),
+        rv += [digestline(a) for a in self.algos]
+        return "".join(rv)
 
     def _add(self, manifest, signature):
         self.manifests += manifest,
@@ -116,7 +124,7 @@ class Digests(object):
         return "\n".join(self.signatures)
     signature = property(_get_signature)
 
-def xpisign(xpifile, keyfile, outfile=None):
+def xpisign(xpifile, keyfile, outfile=None, optimize=False):
     '''
     Sign an XP-Install (XPI file)
 
@@ -132,6 +140,7 @@ def xpisign(xpifile, keyfile, outfile=None):
     @param xpifile: file to sign
     @param keyfile: key to sign with
     @param outfile: (optional) file to write the signed result to
+    @param optimize: (optional) optimize hash selection
     @return: signed result file name or buffer
     '''
 
@@ -163,7 +172,10 @@ def xpisign(xpifile, keyfile, outfile=None):
         pass
 
     # generate all digests
-    digests = Digests()
+    if optimize:
+        digests = Digests(algos=["SHA1"])
+    else:
+        digests = Digests()
     for name, content in files:
         digests.add(name, content)
 
@@ -211,21 +223,26 @@ if __name__ == "__main__":
 
     def main(args):
         op = OptionParser(usage="Usage: %prog [options] xpifile outfile")
-        op.add_option(
-                      "-k",
-                       "--keyfile",
-                        dest="keyfile",
-                        default="sign.pem",
-                        help="Key file to get the certificate from"
-                        )
-        op.add_option(
-                      "-f",
-                       "--force",
-                        dest="force",
-                        action="store_true",
-                        default=False,
-                        help="Force signing, i.e. overwrite outfile if it already exists"
-                        )
+        op.add_option("-k",
+                      "--keyfile",
+                      dest="keyfile",
+                      default="sign.pem",
+                      help="Key file to get the certificate from"
+                      )
+        op.add_option("-f",
+                      "--force",
+                      dest="force",
+                      action="store_true",
+                      default=False,
+                      help="Force signing, i.e. overwrite outfile if it already exists"
+                      )
+        op.add_option("-o",
+                      "--optimize",
+                      dest="optimize",
+                      action="store_true",
+                      default=False,
+                      help="Optimize signatures, avoiding inclusion of weak hashes"
+                      )
         options, args = op.parse_args(args)
         try:
             xpifile, outfile = args
@@ -239,11 +256,17 @@ if __name__ == "__main__":
         if not os.path.exists(keyfile):
             op.error("keyfile %s cannot be found" % keyfile)
 
+        optimize = options.optimize
+
         try:
             with open(xpifile, "rb") as xp:
                 try:
                     with open(outfile, "wb") as op:
-                        xpisign(xp, keyfile, op)
+                        xpisign(xpifile=xp,
+                                keyfile=keyfile,
+                                outfile=op,
+                                optimize=optimize
+                                )
                 except IOError:
                     op.error("Failed to open outfile %s" % outfile)
         except IOError:
