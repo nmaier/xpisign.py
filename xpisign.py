@@ -140,7 +140,7 @@ def xpisign(xpifile, keyfile, outfile=None):
             return xpisign(zp, keyfile, outfile)
 
     if outfile and isinstance(outfile, basestring):
-        with open(outfile, "w") as op:
+        with open(outfile, "wb") as op:
             xpisign(zp, keyfile, op)
             return outfile
 
