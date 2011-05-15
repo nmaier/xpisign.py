@@ -147,18 +147,20 @@ def xpisign(xpifile, keyfile, outfile=None):
     if not outfile:
         outfile = io.BytesIO()
 
-    # store the current position, so that it can be restored later
+    # read file list and contents, skipping any existing meta files
     try:
-        outpos = outfile.tell()
+        inpos = xpifile.tell()
     except:
         pass
-
-    # read file list and contents, skipping any existing meta files
     with zipfile.ZipFile(xpifile, "r") as xp:
         files = [(n, xp.read(n))
                  for n in sorted(xp.namelist(), key=filekeyfun)
                  if not re.match("META-INF/", n)
                  ]
+    try:
+        inpos = xpifile.seek(inpos, 0)
+    except:
+        pass
 
     # generate all digests
     digests = Digests()
@@ -180,6 +182,12 @@ def xpisign(xpifile, keyfile, outfile=None):
     # usually, or even expected to be the last files of the archive
     files += ["META-INF/manifest.mf", digests.manifest],
     files += ["META-INF/zigbert.sf", digests.signature],
+
+    # store the current position, so that it can be restored later
+    try:
+        outpos = outfile.tell()
+    except:
+        pass
 
     # write stuff
     with zipfile.ZipFile(outfile, "w", zipfile.ZIP_DEFLATED) as zp:
