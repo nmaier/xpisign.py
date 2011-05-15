@@ -35,14 +35,11 @@ License:
 import io
 import os
 import re
+import zipfile
+import zlib
 
 from base64 import b64encode as base64
 from hashlib import md5, sha1
-
-try:
-    import xpi_zipfile as zipfile
-except ImportError:
-    import zipfile
 
 try:
     import M2Crypto.SMIME as M2S
@@ -56,7 +53,7 @@ except ImportError:
     # not standalone, re-raise
     raise
 
-__all__ = ['xpisign']
+__all__ = ["xpisign"]
 __version__ = "1.1"
 
 def filekeyfun(name):
@@ -75,6 +72,41 @@ def filekeyfun(name):
         prio = 5
     parts = [prio] + list(os.path.split(name.lower()))
     return "%d-%s-%s" % tuple(parts)
+
+class StreamPositionRestore(object):
+    def __init__(self, stream):
+        self.stream = stream
+    def __enter__(self):
+        self.__pos = None
+        try:
+            self.__pos = self.stream.tell()
+        except:
+            pass
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.__pos is not None:
+            try:
+                self.stream.seek(self.__pos, 0)
+            except:
+                pass
+        return self
+
+orig_compressobj = zlib.compressobj
+def minor_compressobj(compression, type, hint):
+    # always use a compression level of 2 for xpi optimized compression
+    return orig_compressobj(2, type, hint)
+
+class ZipFileMinorCompression(object):
+    def __init__(self, minor_compression=True):
+        self.__minor_compression = minor_compression
+    def __enter__(self):
+        if self.__minor_compression:
+            zlib.compressobj = minor_compressobj
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.__minor_compression:
+            zlib.compressobj = orig_compressobj
+        return self
 
 class Digests(object):
     def __init__(self, algos=["MD5", "SHA1"]):
@@ -125,7 +157,12 @@ class Digests(object):
         return "\n".join(self.signatures)
     signature = property(_get_signature)
 
-def xpisign(xpifile, keyfile, outfile=None, optimize=False):
+def xpisign(xpifile,
+            keyfile,
+            outfile=None,
+            optimize_signatures=False,
+            optimize_compression=False
+            ):
     '''
     Sign an XP-Install (XPI file)
 
@@ -138,10 +175,19 @@ def xpisign(xpifile, keyfile, outfile=None, optimize=False):
     If no outfile is provided then the function will return a file-like object
     containing the result. Else outfile is returned.
 
+    Note: optimize_compression will temporarily override zlib.compressobj to
+    always use another compression. It is therefore a bad idea to use this
+    feature while (implicitly) using compressobj in parallel in the same
+    process.
+    (This limitation arises because of the zipfile implementation not enabling
+    users to specify another compression rate. If you know a better solution,
+    then please let me know.)
+
     @param xpifile: file to sign
     @param keyfile: key to sign with
     @param outfile: (optional) file to write the signed result to
-    @param optimize: (optional) optimize hash selection
+    @param optimize_signatures: (optional) optimize signature hash selection
+    @param optimize_compression: (optional) optimize compression level
     @return: signed result file name or buffer
     '''
 
@@ -158,22 +204,14 @@ def xpisign(xpifile, keyfile, outfile=None, optimize=False):
         outfile = io.BytesIO()
 
     # read file list and contents, skipping any existing meta files
-    try:
-        inpos = xpifile.tell()
-    except:
-        pass
-    with zipfile.ZipFile(xpifile, "r") as xp:
-        files = [(n, xp.read(n))
-                 for n in sorted(xp.namelist(), key=filekeyfun)
-                 if not re.match("META-INF/", n)
-                 ]
-    try:
-        inpos = xpifile.seek(inpos, 0)
-    except:
-        pass
+    with StreamPositionRestore(xpifile), zipfile.ZipFile(xpifile, "r") as xp:
+            files = [(n, xp.read(n))
+                     for n in sorted(xp.namelist(), key=filekeyfun)
+                     if not re.match("META-INF/", n)
+                     ]
 
     # generate all digests
-    if optimize:
+    if optimize_signatures:
         digests = Digests(algos=["SHA1"])
     else:
         digests = Digests()
@@ -196,25 +234,14 @@ def xpisign(xpifile, keyfile, outfile=None, optimize=False):
     files += ["META-INF/manifest.mf", digests.manifest],
     files += ["META-INF/zigbert.sf", digests.signature],
 
-    # store the current position, so that it can be restored later
-    try:
-        outpos = outfile.tell()
-    except:
-        pass
-
     # write stuff
-    with zipfile.ZipFile(outfile, "w", zipfile.ZIP_DEFLATED) as zp:
-        for name, content in files:
-            if re.search(".(png|xpt)$", name):
-                zp.writestr(name, content, zipfile.ZIP_STORED)
-            else:
-                zp.writestr(name, content, zipfile.ZIP_DEFLATED)
-
-    # need to restore the stream position
-    try:
-        outfile.seek(outpos, 0)
-    except:
-        pass
+    with StreamPositionRestore(outfile), ZipFileMinorCompression(optimize_compression):
+        with zipfile.ZipFile(outfile, "w", zipfile.ZIP_DEFLATED) as zp:
+            for name, content in files:
+                if re.search(".(png|xpt)$", name):
+                    zp.writestr(name, content, zipfile.ZIP_STORED)
+                else:
+                    zp.writestr(name, content, zipfile.ZIP_DEFLATED)
 
     return outfile
 
@@ -242,7 +269,7 @@ if __name__ == "__main__":
                       dest="optimize",
                       action="store_true",
                       default=False,
-                      help="Optimize signatures, avoiding inclusion of weak hashes"
+                      help="Optimize signatures, avoiding inclusion of weak hashes. Also optimize the compression level."
                       )
         options, args = op.parse_args(args)
         try:
@@ -266,7 +293,8 @@ if __name__ == "__main__":
                         xpisign(xpifile=xp,
                                 keyfile=keyfile,
                                 outfile=op,
-                                optimize=optimize
+                                optimize_signatures=optimize,
+                                optimize_compression=optimize
                                 )
                 except IOError:
                     op.error("Failed to open outfile %s" % outfile)
