@@ -53,8 +53,14 @@ except ImportError:
     # not standalone, re-raise
     raise
 
+
 __all__ = ["xpisign"]
 __version__ = "1.1"
+
+RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
+RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
+RE_META = re.compile("META-INF/")
+
 
 def filekeyfun(name):
     '''
@@ -158,7 +164,7 @@ class Digests(object):
     signature = property(_get_signature)
 
 def maybe_optimize_inner_archive(name, content):
-    if not re.search("\.(jar|zip)$", name, re.I):
+    if not RE_ARCHIVES.search(name):
         return name, content
 
     with io.BytesIO(content) as cp, zipfile.ZipFile(cp, "r") as zp:
@@ -222,7 +228,7 @@ def xpisign(xpifile,
     with StreamPositionRestore(xpifile), zipfile.ZipFile(xpifile, "r") as xp:
         files = [maybe_optimize_inner_archive(n, xp.read(n))
                  for n in sorted(xp.namelist(), key=filekeyfun)
-                 if not re.match("META-INF/", n)
+                 if not RE_META.match(n)
                  ]
 
     # generate all digests
@@ -253,7 +259,7 @@ def xpisign(xpifile,
     with StreamPositionRestore(outfile), ZipFileMinorCompression(optimize_compression):
         with zipfile.ZipFile(outfile, "w", zipfile.ZIP_DEFLATED) as zp:
             for name, content in files:
-                if re.search(".(png|xpt)$", name, re.I):
+                if RE_ALREADY_COMPRESSED.search(name):
                     zp.writestr(name, content, zipfile.ZIP_STORED)
                 else:
                     zp.writestr(name, content, zipfile.ZIP_DEFLATED)
