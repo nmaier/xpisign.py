@@ -44,6 +44,7 @@ from hashlib import md5, sha1
 try:
     import M2Crypto.SMIME as M2S
     from M2Crypto.BIO import MemoryBuffer as M2Buffer
+    from M2Crypto.EVP import EVPError as M2EVPError
 except ImportError:
     if __name__ == '__main__':
         import sys
@@ -240,13 +241,18 @@ def xpisign(xpifile,
         digests.add(name, content)
 
     # generate the detached signature
-    smime = M2S.SMIME()
-    smime.load_key(keyfile, certfile=keyfile)
+    try:
+        smime = M2S.SMIME()
+        smime.load_key(keyfile, certfile=keyfile)
 
-    pkcs7 = M2Buffer()
-    smime.sign(M2Buffer(digests.signature),
-               M2S.PKCS7_DETACHED | M2S.PKCS7_BINARY
-               ).write_der(pkcs7)
+        pkcs7 = M2Buffer()
+        smime.sign(M2Buffer(digests.signature),
+                   M2S.PKCS7_DETACHED | M2S.PKCS7_BINARY
+                   ).write_der(pkcs7)
+    except M2EVPError, ex:
+        if re.search("ANY PRIVATE KEY", ex.message):
+            raise ValueError("Key file does not contain a private key")
+        raise ValueError("Signing failed. Wrong password?")
 
     # add the meta signing files
     # needs to be the first file
@@ -271,39 +277,39 @@ if __name__ == "__main__":
     from optparse import OptionParser
 
     def main(args):
-        op = OptionParser(usage="Usage: %prog [options] xpifile outfile")
-        op.add_option("-k",
-                      "--keyfile",
-                      dest="keyfile",
-                      default="sign.pem",
-                      help="Key file to get the certificate from"
-                      )
-        op.add_option("-f",
-                      "--force",
-                      dest="force",
-                      action="store_true",
-                      default=False,
-                      help="Force signing, i.e. overwrite outfile if it already exists"
-                      )
-        op.add_option("-o",
-                      "--optimize",
-                      dest="optimize",
-                      action="store_true",
-                      default=False,
-                      help="Optimize signatures, avoiding inclusion of weak hashes. Also optimize the compression level."
-                      )
-        options, args = op.parse_args(args)
+        optparse = OptionParser(usage="Usage: %prog [options] xpifile outfile")
+        optparse.add_option("-k",
+                            "--keyfile",
+                            dest="keyfile",
+                            default="sign.pem",
+                            help="Key file to get the certificate from"
+                            )
+        optparse.add_option("-f",
+                            "--force",
+                            dest="force",
+                            action="store_true",
+                            default=False,
+                            help="Force signing, i.e. overwrite outfile if it already exists"
+                            )
+        optparse.add_option("-o",
+                            "--optimize",
+                            dest="optimize",
+                            action="store_true",
+                            default=False,
+                            help="Optimize signatures, avoiding inclusion of weak hashes. Also optimize the compression level."
+                            )
+        options, args = optparse.parse_args(args)
         try:
             xpifile, outfile = args
         except ValueError:
-            op.error("Need to specify xpifile and outfile!")
+            optparse.error("Need to specify xpifile and outfile!")
 
         if not options.force and os.path.exists(outfile):
-            op.error("outfile %s already exists" % outfile)
+            optparse.error("outfile %s already exists" % outfile)
 
         keyfile = options.keyfile
         if not os.path.exists(keyfile):
-            op.error("keyfile %s cannot be found" % keyfile)
+            optparse.error("keyfile %s cannot be found" % keyfile)
 
         optimize = options.optimize
 
@@ -311,16 +317,19 @@ if __name__ == "__main__":
             with open(xpifile, "rb") as xp:
                 try:
                     with open(outfile, "wb") as op:
-                        xpisign(xpifile=xp,
-                                keyfile=keyfile,
-                                outfile=op,
-                                optimize_signatures=optimize,
-                                optimize_compression=optimize
-                                )
+                        try:
+                            xpisign(xpifile=xp,
+                                    keyfile=keyfile,
+                                    outfile=op,
+                                    optimize_signatures=optimize,
+                                    optimize_compression=optimize
+                                    )
+                        except ValueError, ex:
+                            optparse.error(ex.message)
                 except IOError:
-                    op.error("Failed to open outfile %s" % outfile)
+                    optparse.error("Failed to open outfile %s" % outfile)
         except IOError:
-            op.error("Failed to open xpifile %s" % xpifile)
+            optparse.error("Failed to open xpifile %s" % xpifile)
 
         return 0
 
