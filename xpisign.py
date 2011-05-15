@@ -226,9 +226,9 @@ if __name__ == "__main__":
                         default=False,
                         help="Force signing, i.e. overwrite outfile if it already exists"
                         )
-        (options, args) = op.parse_args(args)
+        options, args = op.parse_args(args)
         try:
-            (xpifile, outfile) = args
+            xpifile, outfile = args
         except ValueError:
             op.error("Need to specify xpifile and outfile!")
 
