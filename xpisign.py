@@ -45,7 +45,8 @@ except ImportError:
     import zipfile
 
 try:
-    import M2Crypto
+    import M2Crypto.SMIME as M2S
+    from M2Crypto.BIO import MemoryBuffer as M2Buffer
 except ImportError:
     if __name__ == '__main__':
         import sys
@@ -180,12 +181,12 @@ def xpisign(xpifile, keyfile, outfile=None, optimize=False):
         digests.add(name, content)
 
     # generate the detached signature
-    smime = M2Crypto.SMIME.SMIME()
+    smime = M2S.SMIME()
     smime.load_key(keyfile, certfile=keyfile)
 
-    pkcs7 = M2Crypto.BIO.MemoryBuffer()
-    smime.sign(M2Crypto.BIO.MemoryBuffer(digests.signature),
-               M2Crypto.SMIME.PKCS7_DETACHED | M2Crypto.SMIME.PKCS7_BINARY
+    pkcs7 = M2Buffer()
+    smime.sign(M2Buffer(digests.signature),
+               M2S.PKCS7_DETACHED | M2S.PKCS7_BINARY
                ).write_der(pkcs7)
 
     # add the meta signing files
