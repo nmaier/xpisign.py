@@ -157,6 +157,21 @@ class Digests(object):
         return "\n".join(self.signatures)
     signature = property(_get_signature)
 
+def maybe_optimize_inner_archive(name, content):
+    if not re.search("\.(jar|zip)$", name, re.I):
+        return name, content
+
+    with io.BytesIO(content) as cp, zipfile.ZipFile(cp, "r") as zp:
+        files = [maybe_optimize_inner_archive(n, zp.read(n))
+                 for n in sorted(zp.namelist())
+                 ]
+    rv = io.BytesIO()
+    with StreamPositionRestore(rv):
+        with zipfile.ZipFile(rv, "w", zipfile.ZIP_STORED) as zp:
+            for i,c in files:
+                zp.writestr(i, c)
+    return name, rv.read()
+
 def xpisign(xpifile,
             keyfile,
             outfile=None,
@@ -205,10 +220,10 @@ def xpisign(xpifile,
 
     # read file list and contents, skipping any existing meta files
     with StreamPositionRestore(xpifile), zipfile.ZipFile(xpifile, "r") as xp:
-            files = [(n, xp.read(n))
-                     for n in sorted(xp.namelist(), key=filekeyfun)
-                     if not re.match("META-INF/", n)
-                     ]
+        files = [maybe_optimize_inner_archive(n, xp.read(n))
+                 for n in sorted(xp.namelist(), key=filekeyfun)
+                 if not re.match("META-INF/", n)
+                 ]
 
     # generate all digests
     if optimize_signatures:
@@ -238,7 +253,7 @@ def xpisign(xpifile,
     with StreamPositionRestore(outfile), ZipFileMinorCompression(optimize_compression):
         with zipfile.ZipFile(outfile, "w", zipfile.ZIP_DEFLATED) as zp:
             for name, content in files:
-                if re.search(".(png|xpt)$", name):
+                if re.search(".(png|xpt)$", name, re.I):
                     zp.writestr(name, content, zipfile.ZIP_STORED)
                 else:
                     zp.writestr(name, content, zipfile.ZIP_DEFLATED)
