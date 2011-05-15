@@ -314,7 +314,10 @@ if __name__ == "__main__":
         optimize = options.optimize
 
         try:
-            with open(xpifile, "rb") as xp:
+            # buffer stuff, in case xpifile == outfile
+            with open(xpifile, "rb") as tp:
+                xp = io.BytesIO(tp.read())
+            with xp:
                 try:
                     with open(outfile, "wb") as op:
                         try:
