@@ -32,6 +32,8 @@ License:
     and related or neighboring rights to this work.
 """
 
+from __future__ import with_statement
+
 import io
 import os
 import re
