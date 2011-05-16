@@ -85,6 +85,21 @@ def filekeyfun(name):
     parts = [prio] + list(os.path.split(name.lower()))
     return "%d-%s-%s" % tuple(parts)
 
+if "__enter__" in dir(zipfile.ZipFile):
+    ZipFile = zipfile.ZipFile
+else:
+    # Compat
+    # Make compatible with "with_statement"
+    class ZipFile(zipfile.ZipFile):
+        def __enter__(self):
+            return self
+        def __exit__(self, type, value, traceback):
+            self.close()
+        def writestr(self, info, bytes, compression):
+            compression = self.compression
+            zipfile.ZipFile.writestr(self, info, bytes)
+            self.compression = compression
+
 class StreamPositionRestore(object):
     def __init__(self, stream):
         self.stream = stream
@@ -173,14 +188,15 @@ def maybe_optimize_inner_archive(name, content):
     if not RE_ARCHIVES.search(name):
         return name, content
 
-    with io.BytesIO(content) as cp, zipfile.ZipFile(cp, "r") as zp:
-        files = [maybe_optimize_inner_archive(n, zp.read(n))
-                 for n in sorted(zp.namelist())
-                 if not RE_DIRECTORY.search(n)
-                 ]
+    with io.BytesIO(content) as cp:
+        with ZipFile(cp, "r") as zp:
+            files = [maybe_optimize_inner_archive(n, zp.read(n))
+                     for n in sorted(zp.namelist())
+                     if not RE_DIRECTORY.search(n)
+                     ]
     rv = io.BytesIO()
     with StreamPositionRestore(rv):
-        with zipfile.ZipFile(rv, "w", zipfile.ZIP_STORED) as zp:
+        with ZipFile(rv, "w", zipfile.ZIP_STORED) as zp:
             for i,c in files:
                 zp.writestr(i, c)
     return name, rv.read()
@@ -232,10 +248,11 @@ def xpisign(xpifile,
         outfile = io.BytesIO()
 
     # read file list and contents, skipping any existing meta files
-    with StreamPositionRestore(xpifile), zipfile.ZipFile(xpifile, "r") as xp:
-        files = [maybe_optimize_inner_archive(n, xp.read(n))
-                 for n in sorted(xp.namelist(), key=filekeyfun)
-                 if not RE_META.match(n) and not RE_DIRECTORY.search(n)
+    with StreamPositionRestore(xpifile):
+        with ZipFile(xpifile, "r") as xp:
+            files = [maybe_optimize_inner_archive(n, xp.read(n))
+                     for n in sorted(xp.namelist(), key=filekeyfun)
+                     if not RE_META.match(n) and not RE_DIRECTORY.search(n)
                  ]
 
     # generate all digests
@@ -286,13 +303,14 @@ def xpisign(xpifile,
     files += ["META-INF/zigbert.sf", digests.signature],
 
     # write stuff
-    with StreamPositionRestore(outfile), ZipFileMinorCompression(optimize_compression):
-        with zipfile.ZipFile(outfile, "w", zipfile.ZIP_DEFLATED) as zp:
-            for name, content in files:
-                if RE_ALREADY_COMPRESSED.search(name):
-                    zp.writestr(name, content, zipfile.ZIP_STORED)
-                else:
-                    zp.writestr(name, content, zipfile.ZIP_DEFLATED)
+    with StreamPositionRestore(outfile):
+        with ZipFileMinorCompression(optimize_compression):
+            with ZipFile(outfile, "w", zipfile.ZIP_DEFLATED) as zp:
+                for name, content in files:
+                    if RE_ALREADY_COMPRESSED.search(name):
+                        zp.writestr(name, content, zipfile.ZIP_STORED)
+                    else:
+                        zp.writestr(name, content, zipfile.ZIP_DEFLATED)
 
     return outfile
 
