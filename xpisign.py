@@ -57,7 +57,8 @@ except ImportError:
 
 
 __all__ = ["xpisign"]
-__version__ = "1.5"
+__version__ = "1.6"
+__versioninfo__ = "xpisign.py (version: %s; https://github.com/nmaier/xpisign.py)" % __version__
 
 RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
 RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
@@ -130,8 +131,8 @@ class Digests(object):
 
         self._add(self.__manifest_version, self.__signature_version)
 
-    __manifest_version = "Manifest-Version: 1.0\nCreated-By: xpisign.py (version: %s)\n" % __version__
-    __signature_version = "Signature-Version: 1.0\nCreated-By: xpisign.py (version: %s)\n" % __version__
+    __manifest_version = "Manifest-Version: 1.0\nCreated-By: %s\n" % __versioninfo__
+    __signature_version = "Signature-Version: 1.0\nCreated-By: %s\n" % __versioninfo__
 
     __algos = {"MD5": md5, "SHA1": sha1}
 
