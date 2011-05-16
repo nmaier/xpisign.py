@@ -57,7 +57,7 @@ except ImportError:
 
 
 __all__ = ["xpisign"]
-__version__ = "1.4"
+__version__ = "1.5"
 
 RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
 RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
