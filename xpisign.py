@@ -346,6 +346,9 @@ if __name__ == "__main__":
         except ValueError:
             optparse.error("Need to specify xpifile and outfile!")
 
+        if not os.path.isfile(xpifile):
+            optparse.error("xpifile %s is not a file" % xpifile)
+
         if not options.force and os.path.exists(outfile):
             optparse.error("outfile %s already exists" % outfile)
 
