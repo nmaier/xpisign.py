@@ -43,6 +43,7 @@ from hashlib import md5, sha1
 
 try:
     import M2Crypto.SMIME as M2S
+    import M2Crypto.X509 as M2X509
     from M2Crypto.BIO import MemoryBuffer as M2Buffer
     from M2Crypto.EVP import EVPError as M2EVPError
 except ImportError:
@@ -60,6 +61,9 @@ __version__ = "1.3"
 
 RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
 RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
+RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
+                      re.S
+                      )
 RE_META = re.compile("META-INF/")
 
 
@@ -242,8 +246,26 @@ def xpisign(xpifile,
 
     # generate the detached signature
     try:
+        # load intermediate certs if any
+        stack = M2X509.X509_Stack()
+        with open(keyfile, "rb") as kf:
+            keydata = kf.read()
+        certificates = RE_CERTS.finditer(keydata)
+
+        # the first certificate is assumed to be the cs certificate
+        certificates.next()
+        for c in certificates:
+            cert = M2X509.load_cert_string(c.group(0))
+            # skip the main CA cert, as this must be built-in anyway
+            if (cert.check_ca()
+                and str(cert.get_issuer()) == str(cert.get_subject())):
+                continue
+            stack.push(cert)
+
+        # actual signing
         smime = M2S.SMIME()
-        smime.load_key(keyfile, certfile=keyfile)
+        smime.load_key(keyfile)
+        smime.set_x509_stack(stack)
 
         pkcs7 = M2Buffer()
         smime.sign(M2Buffer(digests.signature),
