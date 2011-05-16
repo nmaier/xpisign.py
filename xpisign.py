@@ -116,7 +116,7 @@ class StreamPositionRestore(object):
                 self.stream.seek(self.__pos, 0)
             except:
                 pass
-        return self
+        return False
 
 orig_compressobj = zlib.compressobj
 def minor_compressobj(compression, type, hint):
@@ -133,7 +133,7 @@ class ZipFileMinorCompression(object):
     def __exit__(self, type, value, traceback):
         if self.__minor_compression:
             zlib.compressobj = orig_compressobj
-        return self
+        return False
 
 class Digests(object):
     def __init__(self, algos=["MD5", "SHA1"]):
