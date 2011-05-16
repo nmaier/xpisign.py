@@ -64,8 +64,8 @@ RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
 RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
                       re.S
                       )
+RE_DIRECTORY = re.compile(r"[\\/]$")
 RE_META = re.compile("META-INF/")
-
 
 def filekeyfun(name):
     '''
@@ -175,6 +175,7 @@ def maybe_optimize_inner_archive(name, content):
     with io.BytesIO(content) as cp, zipfile.ZipFile(cp, "r") as zp:
         files = [maybe_optimize_inner_archive(n, zp.read(n))
                  for n in sorted(zp.namelist())
+                 if not RE_DIRECTORY.search(n)
                  ]
     rv = io.BytesIO()
     with StreamPositionRestore(rv):
@@ -233,7 +234,7 @@ def xpisign(xpifile,
     with StreamPositionRestore(xpifile), zipfile.ZipFile(xpifile, "r") as xp:
         files = [maybe_optimize_inner_archive(n, xp.read(n))
                  for n in sorted(xp.namelist(), key=filekeyfun)
-                 if not RE_META.match(n)
+                 if not RE_META.match(n) and not RE_DIRECTORY.search(n)
                  ]
 
     # generate all digests
