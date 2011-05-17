@@ -55,7 +55,6 @@ except ImportError:
         def __exit__(self, type, value, traceback):
             self.close()
 
-
 try:
     import M2Crypto.SMIME as M2S
     import M2Crypto.X509 as M2X509
@@ -69,36 +68,6 @@ except ImportError:
 
     # not standalone, re-raise
     raise
-
-
-__all__ = ["xpisign"]
-__version__ = "1.7"
-__versioninfo__ = "xpisign.py (version: %s; https://github.com/nmaier/xpisign.py)" % __version__
-
-RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
-RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
-RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
-                      re.S
-                      )
-RE_DIRECTORY = re.compile(r"[\\/]$")
-RE_META = re.compile("META-INF/")
-
-def filekeyfun(name):
-    '''
-    Sort keys for xpi files
-    @param name: name of the file to generate the sort key from
-    '''
-
-    prio = 4
-
-    if name == 'install.rdf':
-        prio = 1
-    elif name in ["chrome.manifest", "icon.png", "icon64.png"]:
-        prio = 2
-    elif name in ["MPL", "GPL", "LGPL", "COPYING", "LICENSE", "license.txt"]:
-        prio = 5
-    parts = [prio] + list(os.path.split(name.lower()))
-    return "%d-%s-%s" % tuple(parts)
 
 if "__enter__" in dir(zipfile.ZipFile):
     ZipFile = zipfile.ZipFile
@@ -114,6 +83,19 @@ else:
             compression = self.compression
             zipfile.ZipFile.writestr(self, info, bytes)
             self.compression = compression
+
+
+__all__ = ["xpisign"]
+__version__ = "1.7"
+__versioninfo__ = "xpisign.py (version: %s; https://github.com/nmaier/xpisign.py)" % __version__
+
+RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
+RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
+RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
+                      re.S
+                      )
+RE_DIRECTORY = re.compile(r"[\\/]$")
+RE_META = re.compile("META-INF/")
 
 class StreamPositionRestore(object):
     def __init__(self, stream):
@@ -199,7 +181,27 @@ class Digests(object):
         return "\n".join(self.signatures)
     signature = property(_get_signature)
 
+
+def filekeyfun(name):
+    '''
+    Sort keys for xpi files
+    @param name: name of the file to generate the sort key from
+    '''
+
+    prio = 4
+
+    if name == 'install.rdf':
+        prio = 1
+    elif name in ["chrome.manifest", "icon.png", "icon64.png"]:
+        prio = 2
+    elif name in ["MPL", "GPL", "LGPL", "COPYING", "LICENSE", "license.txt"]:
+        prio = 5
+    parts = [prio] + list(os.path.split(name.lower()))
+    return "%d-%s-%s" % tuple(parts)
+
 def maybe_optimize_inner_archive(name, content):
+    '''Recursivly recompress content if it is an archive'''
+
     if not RE_ARCHIVES.search(name):
         return name, content
 
