@@ -34,7 +34,6 @@ License:
 
 from __future__ import with_statement
 
-import io
 import os
 import re
 import zipfile
@@ -42,6 +41,20 @@ import zlib
 
 from base64 import b64encode as base64
 from hashlib import md5, sha1
+
+try:
+    from io import BytesIO
+except ImportError:
+    try:
+        from cStringIO import cStringIO as _BytesIO
+    except:
+        from StringIO import StringIO as _BytesIO
+    class BytesIO(_BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, type, value, traceback):
+            self.close()
+
 
 try:
     import M2Crypto.SMIME as M2S
@@ -190,13 +203,13 @@ def maybe_optimize_inner_archive(name, content):
     if not RE_ARCHIVES.search(name):
         return name, content
 
-    with io.BytesIO(content) as cp:
+    with BytesIO(content) as cp:
         with ZipFile(cp, "r") as zp:
             files = [maybe_optimize_inner_archive(n, zp.read(n))
                      for n in sorted(zp.namelist())
                      if not RE_DIRECTORY.search(n)
                      ]
-    rv = io.BytesIO()
+    rv = BytesIO()
     with StreamPositionRestore(rv):
         with ZipFile(rv, "w", zipfile.ZIP_STORED) as zp:
             for i,c in files:
@@ -247,7 +260,7 @@ def xpisign(xpifile,
             return outfile
 
     if not outfile:
-        outfile = io.BytesIO()
+        outfile = BytesIO()
 
     # read file list and contents, skipping any existing meta files
     with StreamPositionRestore(xpifile):
@@ -363,7 +376,7 @@ if __name__ == "__main__":
         try:
             # buffer stuff, in case xpifile == outfile
             with open(xpifile, "rb") as tp:
-                xp = io.BytesIO(tp.read())
+                xp = BytesIO(tp.read())
             with xp:
                 try:
                     with open(outfile, "wb") as op:
