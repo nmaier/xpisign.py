@@ -1,11 +1,13 @@
 XP-Install (xpi) code singing.
 ===
 
-Prequisites
+Requirements
 ---
 
-* Recent Python
+* Recent Python (2.5+)
 * [M2Crypto](http://pypi.python.org/pypi/M2Crypto)
+  `easy_install -Z M2Crypto`
+* Windows users must also install valid OpenSSL binaries into their (Python) path. Copying files to the corresponding M2Crypto directory under Python\libs\site-packages will also do the trick
 
 Usage
 ---
