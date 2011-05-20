@@ -79,10 +79,13 @@ else:
             return self
         def __exit__(self, type, value, traceback):
             self.close()
-        def writestr(self, info, bytes, compression):
-            compression = self.compression
+        def writestr(self, info, bytes, compression=None):
+            if compression is not None:
+                _compression = self.compression
+                self.compression = compression
             zipfile.ZipFile.writestr(self, info, bytes)
-            self.compression = compression
+            if compression is not None:
+                self.compression = _compression
 
 
 __all__ = ["xpisign"]
