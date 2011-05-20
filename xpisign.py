@@ -89,7 +89,7 @@ else:
 
 
 __all__ = ["xpisign"]
-__version__ = "1.7"
+__version__ = "1.8"
 __versioninfo__ = "xpisign.py (version: %s; https://github.com/nmaier/xpisign.py)" % __version__
 
 RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
