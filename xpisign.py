@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-XP-Install (xpi) code singing.
+XP-Install (xpi) code signing.
 
 Module Usage:
     xpisign("addon.xpi", "cert.pem", "addon.signed.xpi")

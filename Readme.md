@@ -1,4 +1,4 @@
-XP-Install (xpi) code singing.
+XP-Install (xpi) code signing.
 ===
 
 Requirements
