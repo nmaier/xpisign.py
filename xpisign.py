@@ -36,6 +36,7 @@ from __future__ import with_statement
 
 import os
 import re
+import warnings
 import zipfile
 import zlib
 
@@ -47,7 +48,7 @@ try:
 except ImportError:
     try:
         from cStringIO import cStringIO as _BytesIO
-    except:
+    except ImportError:
         from StringIO import StringIO as _BytesIO
     class BytesIO(_BytesIO):
         def __enter__(self):
@@ -55,25 +56,12 @@ except ImportError:
         def __exit__(self, type, value, traceback):
             self.close()
 
-try:
-    import M2Crypto.SMIME as M2S
-    import M2Crypto.X509 as M2X509
-    from M2Crypto.BIO import MemoryBuffer as M2Buffer
-    from M2Crypto.EVP import EVPError as M2EVPError
-except ImportError:
-    if __name__ == '__main__':
-        import sys
-        print >>sys.stderr, "Failed to load M2Crypto"
-        sys.exit(1)
 
-    # not standalone, re-raise
-    raise
-
-if "__enter__" in dir(zipfile.ZipFile):
+if hasattr(zipfile.ZipFile, "__enter__"):
     ZipFile = zipfile.ZipFile
 else:
-    # Compat
     # Make compatible with "with_statement"
+    # and also implement compression argument
     class ZipFile(zipfile.ZipFile):
         def __enter__(self):
             return self
@@ -89,20 +77,169 @@ else:
 
 
 __all__ = ["xpisign"]
-__version__ = "1.8"
+__version__ = "1.9"
 __versioninfo__ = "xpisign.py (version: %s; https://github.com/nmaier/xpisign.py)" % __version__
 
 RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
 RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
-RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
-                      re.S
-                      )
+RE_KEY = re.compile(r"-----BEGIN (ENCRYPTED )?PRIVATE KEY-----.+?-----END (ENCRYPTED )?PRIVATE KEY-----", re.S)
+RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----', re.S)
 RE_DIRECTORY = re.compile(r"[\\/]$")
 RE_META = re.compile("META-INF/")
 
+
+def parse_keyfile(keyfile):
+    """
+    Parse a keyfile into private key, signing cert and CA stack
+    """
+
+    with open(keyfile, "rb") as kf:
+        kf = kf.read()
+        key = RE_KEY.search(kf)
+        certs = RE_CERTS.finditer(kf)
+        return (str(key.group(0)),
+                str(certs.next().group(0)),
+                (str(c.group(0)) for c in certs)
+                )
+
+
+try:
+    import subprocess
+    from tempfile import NamedTemporaryFile
+
+
+    try:
+        check_output = subprocess.check_output
+    except AttributeError:
+        def check_output(*args, **kw):
+            kw["stdout"] = subprocess.PIPE
+            return subprocess.Popen(*args, **kw).communicate()[0]
+
+
+    def find_executable(name):
+        """
+        Find an executable in path
+        See which(1)
+        """
+
+        is_windows = os.name != "nt"
+        def check(path):
+            return (os.path.isfile(path) and
+                    (not is_windows or os.access(path, os.X_OK)))
+
+        if not is_windows and not name.lower().endswith(".exe"):
+            name += ".exe"
+
+        if check(name):
+            return name
+
+        for cand in os.environ["PATH"].split(os.pathsep):
+            cand = os.path.join(cand, name)
+            if check(cand):
+                return cand
+
+        return None
+
+    openssl = find_executable("openssl")
+    if not openssl:
+        raise ImportError("Failed to find openssl executable")
+
+
+    def smime_pkcs7_der_sign_openssl(keyfile, content):
+        """
+        Sign content with a keyfile using OpenSSL (and various tmp files :p)
+        """
+
+        warnings.warn("Using openssl (%s) compatibilty layer due to lack of M2Crypto. This will produce slightly larger signatures, as the CA root certificate will be included." % (openssl,), RuntimeWarning)
+
+        # load intermediate certs
+        key, cs, stack = parse_keyfile(keyfile)
+        with NamedTemporaryFile() as signer:
+            print >>signer, key
+            print >>signer, cs
+            signer.flush()
+            with NamedTemporaryFile() as certfile:
+                for c in stack:
+                    print >>certfile, c
+                certfile.flush()
+                with NamedTemporaryFile() as infile:
+                    infile.write(content)
+                    infile.flush()
+                    return check_output((openssl, "smime", "-sign", "-binary",
+                                         "-signer", signer.name,
+                                         "-certfile", certfile.name,
+                                         "-outform", "DER",
+                                         "-in", infile.name),
+                                        bufsize=0)
+
+    smime_pkcs7_der_sign_openssl.generator = check_output((openssl, "version")).strip()
+
+except ImportError:
+    smime_pkcs7_der_sign_openssl = None
+
+
+try:
+    import M2Crypto as M2
+    import M2Crypto.SMIME as M2S
+    import M2Crypto.X509 as M2X509
+    from M2Crypto.BIO import MemoryBuffer as M2Buffer
+    from M2Crypto.EVP import EVPError as M2EVPError
+
+
+    def smime_pkcs7_der_sign_m2(keyfile, content):
+        """
+        Sign content with a keyfile using M2Crypto
+        """
+
+        try:
+            # load intermediate certs if any
+            stack = M2X509.X509_Stack()
+            _, _, certificates = parse_keyfile(keyfile)
+            for c in certificates:
+                cert = M2X509.load_cert_string(c)
+                # skip the main CA cert, as this must be built-in anyway
+                if (cert.check_ca()
+                    and str(cert.get_issuer()) == str(cert.get_subject())):
+                    continue
+                stack.push(cert)
+
+            # actual signing
+            smime = M2S.SMIME()
+            smime.load_key(keyfile)
+            smime.set_x509_stack(stack)
+
+            pkcs7 = M2Buffer()
+            smime.sign(M2Buffer(content),
+                       M2S.PKCS7_DETACHED | M2S.PKCS7_BINARY
+                       ).write_der(pkcs7)
+            return pkcs7.read()
+
+        except M2EVPError, ex:
+            if re.search("ANY PRIVATE KEY", ex.message):
+                raise ValueError("Key file does not contain a private key")
+            raise ValueError("Signing failed. Wrong password?")
+
+    smime_pkcs7_der_sign_m2.generator = "M2Crypto %s"  % M2.version
+
+except ImportError:
+    smime_pkcs7_der_sign_m2 = None
+
+smime_pkcs7_der_sign = smime_pkcs7_der_sign_m2 or smime_pkcs7_der_sign_openssl
+if not smime_pkcs7_der_sign:
+    if __name__ == '__main__':
+        import sys
+        print >>sys.stderr, "Failed to load M2Crypto or subprocess alternative", ex
+        sys.exit(1)
+
+    raise ImportError("No signing implementation available!")
+
+
 class StreamPositionRestore(object):
+    '''Stream position restore contextmanager helper'''
+
     def __init__(self, stream):
         self.stream = stream
+
     def __enter__(self):
         self.__pos = None
         try:
@@ -110,6 +247,7 @@ class StreamPositionRestore(object):
         except:
             pass
         return self
+
     def __exit__(self, type, value, traceback):
         if self.__pos is not None:
             try:
@@ -118,24 +256,45 @@ class StreamPositionRestore(object):
                 pass
         return False
 
-orig_compressobj = zlib.compressobj
-def minor_compressobj(compression, type, hint):
-    # always use a compression level of 2 for xpi optimized compression
-    return orig_compressobj(2, type, hint)
 
 class ZipFileMinorCompression(object):
+    '''Minor compression zipfile contextmanager helper'''
+
+    __orig_compressobj = zlib.compressobj
+
+    @classmethod
+    def __minor_compressobj(cls, compression, type, hint):
+        # always use a compression level of 2 for xpi optimized compression
+        return cls.__orig_compressobj(2, type, hint)
+
     def __init__(self, minor_compression=True):
         self.__minor_compression = minor_compression
+
     def __enter__(self):
         if self.__minor_compression:
-            zlib.compressobj = minor_compressobj
+            zlib.compressobj = self.__minor_compressobj
         return self
+
     def __exit__(self, type, value, traceback):
         if self.__minor_compression:
-            zlib.compressobj = orig_compressobj
+            zlib.compressobj = self.__orig_compressobj
         return False
 
+
 class Digests(object):
+    '''Digest generator helper'''
+
+    __algos = {"MD5": md5, "SHA1": sha1}
+
+    @property
+    def __manifest_version(self):
+        return "Manifest-Version: 1.0\nCreated-By: %s; %s\n" % (__versioninfo__, smime_pkcs7_der_sign.generator)
+
+    @property
+    def __signature_version(self):
+        return "Signature-Version: 1.0\nCreated-By: %s; %s\n" % (__versioninfo__, smime_pkcs7_der_sign.generator)
+
+
     def __init__(self, algos=["MD5", "SHA1"]):
         if not all(x in self.__algos for x in algos):
             raise ValueError("Not all specified algorithms are known")
@@ -145,11 +304,6 @@ class Digests(object):
         self.signatures = []
 
         self._add(self.__manifest_version, self.__signature_version)
-
-    __manifest_version = "Manifest-Version: 1.0\nCreated-By: %s\n" % __versioninfo__
-    __signature_version = "Signature-Version: 1.0\nCreated-By: %s\n" % __versioninfo__
-
-    __algos = {"MD5": md5, "SHA1": sha1}
 
     def digest(self, content):
         '''
@@ -172,20 +326,21 @@ class Digests(object):
         self.signatures += signature + self.digest(manifest),
 
     def add(self, name, content):
+        ''' Add a manifest resource '''
         self._add("Name: %s\n%s" % (name, self.digest(content)),
                   "Name: %s\n" % name
                   )
 
-    def _get_manifest(self):
+    @property
+    def manifest(self):
         return "\n".join(self.manifests)
-    manifest = property(_get_manifest)
 
-    def _get_signature(self):
+    @property
+    def signature(self):
         return "\n".join(self.signatures)
-    signature = property(_get_signature)
 
 
-def filekeyfun(name):
+def file_key(name):
     '''
     Sort keys for xpi files
     @param name: name of the file to generate the sort key from
@@ -201,6 +356,7 @@ def filekeyfun(name):
         prio = 5
     parts = [prio] + list(os.path.split(name.lower()))
     return "%d-%s-%s" % tuple(parts)
+
 
 def maybe_optimize_inner_archive(name, content):
     '''Recursivly recompress content if it is an archive'''
@@ -220,6 +376,7 @@ def maybe_optimize_inner_archive(name, content):
             for i,c in files:
                 zp.writestr(i, c)
     return name, rv.read()
+
 
 def xpisign(xpifile,
             keyfile,
@@ -271,7 +428,7 @@ def xpisign(xpifile,
     with StreamPositionRestore(xpifile):
         with ZipFile(xpifile, "r") as xp:
             files = [maybe_optimize_inner_archive(n, xp.read(n))
-                     for n in sorted(xp.namelist(), key=filekeyfun)
+                     for n in sorted(xp.namelist(), key=file_key)
                      if not RE_META.match(n) and not RE_DIRECTORY.search(n)
                  ]
 
@@ -283,41 +440,10 @@ def xpisign(xpifile,
     for name, content in files:
         digests.add(name, content)
 
-    # generate the detached signature
-    try:
-        # load intermediate certs if any
-        stack = M2X509.X509_Stack()
-        with open(keyfile, "rb") as kf:
-            keydata = kf.read()
-        certificates = RE_CERTS.finditer(keydata)
-
-        # the first certificate is assumed to be the cs certificate
-        certificates.next()
-        for c in certificates:
-            cert = M2X509.load_cert_string(c.group(0))
-            # skip the main CA cert, as this must be built-in anyway
-            if (cert.check_ca()
-                and str(cert.get_issuer()) == str(cert.get_subject())):
-                continue
-            stack.push(cert)
-
-        # actual signing
-        smime = M2S.SMIME()
-        smime.load_key(keyfile)
-        smime.set_x509_stack(stack)
-
-        pkcs7 = M2Buffer()
-        smime.sign(M2Buffer(digests.signature),
-                   M2S.PKCS7_DETACHED | M2S.PKCS7_BINARY
-                   ).write_der(pkcs7)
-    except M2EVPError, ex:
-        if re.search("ANY PRIVATE KEY", ex.message):
-            raise ValueError("Key file does not contain a private key")
-        raise ValueError("Signing failed. Wrong password?")
-
     # add the meta signing files
     # needs to be the first file
-    files.insert(0, ["META-INF/zigbert.rsa", pkcs7.read()])
+    files.insert(0, ["META-INF/zigbert.rsa",
+                     smime_pkcs7_der_sign(keyfile, digests.signature)])
     # usually, or even expected to be the last files of the archive
     files += ["META-INF/manifest.mf", digests.manifest],
     files += ["META-INF/zigbert.sf", digests.signature],
@@ -334,11 +460,15 @@ def xpisign(xpifile,
 
     return outfile
 
+
 if __name__ == "__main__":
     import sys
     from optparse import OptionParser
 
+
     def main(args):
+        global smime_pkcs7_der_sign
+
         optparse = OptionParser(usage="Usage: %prog [options] xpifile outfile")
         optparse.add_option("-k",
                             "--keyfile",
@@ -360,11 +490,27 @@ if __name__ == "__main__":
                             default=False,
                             help="Optimize signatures, avoiding inclusion of weak hashes. Also optimize the compression level."
                             )
+        optparse.add_option("-s",
+                            "--signer",
+                            dest="signer",
+                            default=None,
+                            help="Force signing with a particular implementation (m2, openssl)"
+                            )
         options, args = optparse.parse_args(args)
         try:
             xpifile, outfile = args
         except ValueError:
             optparse.error("Need to specify xpifile and outfile!")
+
+        if options.signer == "m2":
+            smime_pkcs7_der_sign = smime_pkcs7_der_sign_m2
+        elif options.signer == "openssl":
+            smime_pkcs7_der_sign = smime_pkcs7_der_sign_openssl
+        elif options.signer:
+            optparse.error("Invalid signing implementation")
+
+        if not smime_pkcs7_der_sign:
+            optparse.error("Chosen signing implementation is not available")
 
         if not os.path.isfile(xpifile):
             optparse.error("xpifile %s is not a file" % xpifile)
@@ -400,5 +546,6 @@ if __name__ == "__main__":
             optparse.error("Failed to open xpifile %s" % xpifile)
 
         return 0
+
 
     sys.exit(main(sys.argv[1:]))
