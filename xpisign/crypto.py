@@ -149,5 +149,5 @@ except ImportError:
 
 sign = sign_m2 or sign_openssl
 if not sign:
-    raise ImportError("No signing implementation available!")
+    raise ImportError("No signing implementation available! Either install M2Crypto or add openssl to your $PATH")
 
