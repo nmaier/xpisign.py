@@ -29,6 +29,7 @@ def parse_keyfile(keyfile):
 try:
     import subprocess
     from tempfile import NamedTemporaryFile
+    from functools import wraps
 
 
     try:
@@ -73,8 +74,6 @@ try:
         Sign content with a keyfile using OpenSSL (and various tmp files :p)
         """
 
-        warnings.warn("Using openssl (%s) compatibilty layer due to lack of M2Crypto. This will produce slightly larger signatures, as the CA root certificate will be included." % (openssl,), RuntimeWarning)
-
         # load intermediate certs
         key, cs, stack = parse_keyfile(keyfile)
         with NamedTemporaryFile() as signer:
@@ -95,11 +94,15 @@ try:
                                          "-in", infile.name),
                                         bufsize=0)
 
-    sign_openssl.generator = check_output((openssl, "version")).strip()
+    @wraps(sign_openssl)
+    def sign_openssl_warn(*args, **kw):
+        warnings.warn("Using openssl (%s) compatibilty layer due to lack of M2Crypto. This will produce slightly larger signatures, as the CA root certificate will be included." % (openssl,), RuntimeWarning)
+        return sign_openssl(*args, **kw)
+
+    sign_openssl_warn.generator = sign_openssl.generator = check_output((openssl, "version")).strip()
 
 except ImportError:
-    sign_openssl = None
-
+    sign_openssl_warn = sign_openssl = None
 
 try:
     import M2Crypto as M2
@@ -147,7 +150,7 @@ try:
 except ImportError:
     sign_m2 = None
 
-sign = sign_m2 or sign_openssl
+sign = sign_m2 or sign_openssl_warn
 if not sign:
     raise ImportError("No signing implementation available! Either install M2Crypto or add openssl to your $PATH")
 
