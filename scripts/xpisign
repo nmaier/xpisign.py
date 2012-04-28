@@ -37,7 +37,19 @@ def main(args):
                         default=None,
                         help="Force signing with a particular implementation (m2, openssl)"
                         )
+    optparse.add_option("-v",
+                        "--version",
+                        dest="printversion",
+                        default=False,
+                        action="store_true",
+                        help="Print version"
+                        )
     options, args = optparse.parse_args(args)
+
+    if options.printversion:
+        print __version__
+        return 0
+
     try:
         xpifile, outfile = args
     except ValueError:
