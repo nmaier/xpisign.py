@@ -4,8 +4,7 @@ import sys
 
 from optparse import OptionParser
 
-from xpisign import xpisign, __version__
-from xpisign.compat import BytesIO
+from xpisign import xpisign, BytesIO, __version__
 
 def main(args):
     global smime_pkcs7_der_sign
