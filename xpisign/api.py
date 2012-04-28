@@ -41,8 +41,8 @@ from hashlib import md5, sha1
 from zipfile import ZIP_DEFLATED, ZIP_STORED
 
 from .compat import BytesIO, ZipFile
-from .context import *
-from .crypto import *
+from .context import StreamPositionRestore, ZipFileMinorCompression
+from .crypto import sign, sign_m2, sign_openssl
 
 
 __all__ = ["xpisign", "__version__"]
