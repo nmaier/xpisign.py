@@ -23,12 +23,12 @@ def main(args):
                         default=False,
                         help="Force signing, i.e. overwrite outfile if it already exists"
                         )
-    optparse.add_option("-o",
-                        "--optimize",
+    optparse.add_option("-p",
+                        "--plain",
                         dest="optimize",
-                        action="store_true",
-                        default=False,
-                        help="Optimize signatures, avoiding inclusion of weak hashes. Also optimize the compression level."
+                        action="store_false",
+                        default=True,
+                        help="Generate plain XPI without any optimizations."
                         )
     optparse.add_option("-s",
                         "--signer",

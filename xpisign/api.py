@@ -162,8 +162,8 @@ def maybe_optimize_inner_archive(name, content):
 def xpisign(xpifile,
             keyfile,
             outfile=None,
-            optimize_signatures=False,
-            optimize_compression=False,
+            optimize_signatures=True,
+            optimize_compression=True,
             signer=None
             ):
     '''
