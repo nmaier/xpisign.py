@@ -46,7 +46,7 @@ from .crypto import *
 
 
 __all__ = ["xpisign", "__version__"]
-__version__ = "1.9"
+__version__ = "2.0"
 __versioninfo__ = "xpisign.py (version: %s; https://github.com/nmaier/xpisign.py)" % __version__
 
 RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
