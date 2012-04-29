@@ -2,8 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <title>xpisign.py by nmaier</title>
+    <title>xpisign.py &mdash; XP-Install (xpi) code signing</title>
     
     <link rel="stylesheet" href="stylesheets/styles.css">
     <link rel="stylesheet" href="stylesheets/pygment_trac.css">
@@ -26,32 +25,35 @@
       </header>
       <section>
         <h2>Requirements</h2>
+        <ul>
+          <li>Recent Python (2.5+)</li>
+          <li><a href="http://pypi.python.org/pypi/M2Crypto">M2Crypto</a> (recommended) <code>easy_install -Z M2Crypto</code>
+            <ul>
+              <li>Windows users must also install valid OpenSSL binaries into their (Python) path. Copying files to the corresponding M2Crypto directory under Python\libs\site-packages will also do the trick</li>
+            </ul>
+          </li>
+          <li>OR openssl binary within the path</li>
+          <li>A valid code-signing enable certificate</li>
+        </ul>
 
-<ul>
-<li>Recent Python (2.5+)</li>
-<li>
-<a href="http://pypi.python.org/pypi/M2Crypto">M2Crypto</a> (recommended)
-<code>easy_install -Z M2Crypto</code>
+        <h2>Installation</h2>
+        <p>Use pip (or easy_install or whatever):<br>
+        <code>pip install https://github.com/nmaier/xpisign.py/zipball/master</code></p>
+        <p>Or a particular version (tag):<br>
+        <code>pip install https://github.com/nmaier/xpisign.py/zipball/&lt;version&gt;</code></p>
 
-<ul>
-<li>Windows users must also install valid OpenSSL binaries into their (Python) path. Copying files to the corresponding M2Crypto directory under Python\libs\site-packages will also do the trick</li>
-</ul>
-</li>
-<li>OR openssl binary within the path</li>
-</ul><h2>Usage</h2>
+        <h2>Usage</h2>
+        <p><code>xpisign -k cert.pem addon.xpi addon.signed.xpi</code><br>
+        <code>xpisign --help</code></p>
 
-<p><code>python xpisign.py -k cert.pem addon.xpi addon.signed.xpi</code></p>
-
-<h2>Credits</h2>
-
-<p>Thanks to Wladimir Palant for initially researching this stuff!</p>
+        <h2>Credits</h2>
+        <p>Thanks to Wladimir Palant for initially researching this stuff!</p>
       </section>
       <footer>
-        <p>This project is maintained by <a href="https://github.com/nmaier">nmaier</a></p>
+        <p>This project is maintained by <a href="https://github.com/nmaier">Nils Maier</a></p>
         <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
       </footer>
     </div>
     <script src="javascripts/scale.fix.js"></script>
-    
   </body>
 </html>
