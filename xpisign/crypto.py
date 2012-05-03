@@ -6,7 +6,7 @@ import warnings
 
 from .compat import BytesIO
 
-RE_KEY = re.compile(r"-----BEGIN (ENCRYPTED )?PRIVATE KEY-----.+?-----END (ENCRYPTED )?PRIVATE KEY-----", re.S)
+RE_KEY = re.compile(r"-----BEGIN ((ENCRYPTED|RSA) )?PRIVATE KEY-----.+?-----END ((ENCRYPTED|RSA) )?PRIVATE KEY-----", re.S)
 RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----', re.S)
 
 __all__ = ["sign_m2", "sign_openssl", "sign"]
