@@ -27,8 +27,10 @@ else:
             if compression is not None:
                 _compression = self.compression
                 self.compression = compression
-            zipfile.ZipFile.writestr(self, info, bytes)
-            if compression is not None:
-                self.compression = _compression
+            try:
+                zipfile.ZipFile.writestr(self, info, bytes)
+            finally:
+                if compression is not None:
+                    self.compression = _compression
 
 __all__ = ["BytesIO", "ZipFile"]
