@@ -228,7 +228,7 @@ def xpisign(xpifile,
     else:
         raise ValueError("Invalid signing algorithm")
     if not signer:
-        raise RuntimError("Signing algorithm is not available on this system")
+        raise RuntimeError("Signing algorithm is not available on this system")
 
 
     # read file list and contents, skipping any existing meta files
