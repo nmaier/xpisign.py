@@ -1,9 +1,5 @@
 #!/usr/bin/env python
-
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
+from setuptools import setup, find_packages
 
 import xpisign.api as xpisign
 
@@ -33,9 +29,12 @@ setup(name="xpisign",
 
       platforms=["any"],
       scripts=["scripts/xpisign"],
-      packages=["xpisign"],
+      packages=find_packages(exclude=["tests"]),
 
       install_requires=requirements,
+
+      tests_require="nose>=1.2",
+      test_suite='nose.collector',
 
       zip_safe=True,
 
