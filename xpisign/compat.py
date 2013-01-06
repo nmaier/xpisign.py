@@ -1,15 +1,21 @@
 import zipfile
 
 try:
-    from io import BytesIO
+    import io
+    BytesIO = io.BytesIO
 except ImportError:
+    _BytesIO = None
     try:
-        from cStringIO import cStringIO as _BytesIO
+        import cStringIO
+        _BytesIO = cStringIO.cStringIO
     except ImportError:
-        from StringIO import StringIO as _BytesIO
+        import StringIO
+        _BytesIO = StringIO.StringIO
+
     class BytesIO(_BytesIO):
         def __enter__(self):
             return self
+
         def __exit__(self, type, value, traceback):
             self.close()
 
@@ -21,8 +27,10 @@ else:
     class ZipFile(zipfile.ZipFile):
         def __enter__(self):
             return self
+
         def __exit__(self, type, value, traceback):
             self.close()
+
         def writestr(self, info, bytes, compression=None):
             if compression is not None:
                 _compression = self.compression

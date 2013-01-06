@@ -8,6 +8,7 @@ from optparse import OptionParser
 
 from xpisign import xpisign, BytesIO, __version__
 
+
 def main(args):
     global smime_pkcs7_der_sign
 
@@ -23,7 +24,9 @@ def main(args):
                         dest="force",
                         action="store_true",
                         default=False,
-                        help="Force signing, i.e. overwrite outfile if it already exists"
+                        help=("Force signing, i.e. "
+                              "overwrite outfile if it already exists"
+                              )
                         )
     optparse.add_option("-p",
                         "--plain",
@@ -36,7 +39,9 @@ def main(args):
                         "--signer",
                         dest="signer",
                         default=None,
-                        help="Force signing with a particular implementation (m2, openssl)"
+                        help=("Force signing with a particular implementation "
+                              "(m2, openssl)"
+                              )
                         )
     optparse.add_option("-v",
                         "--version",

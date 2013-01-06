@@ -33,8 +33,6 @@ from __future__ import with_statement
 
 import os
 import re
-import warnings
-import zlib
 
 from base64 import b64encode as base64
 from hashlib import md5, sha1
@@ -47,7 +45,8 @@ from .crypto import sign, sign_m2, sign_openssl
 
 __all__ = ["xpisign", "__version__"]
 __version__ = "2.0.1"
-__versioninfo__ = "xpisign.py (version: %s; https://github.com/nmaier/xpisign.py)" % __version__
+__website__ = "https://github.com/nmaier/xpisign.py"
+__versioninfo__ = "xpisign.py (version: %s; %s)" % (__version__, __website__)
 
 RE_ALREADY_COMPRESSED = re.compile(".(png|xpt)$", re.I)
 RE_ARCHIVES = re.compile("\.(jar|zip)$", re.I)
@@ -62,12 +61,13 @@ class Digests(object):
 
     @property
     def __manifest_version(self):
-        return "Manifest-Version: 1.0\nCreated-By: %s; %s\n" % (__versioninfo__, self.signer.generator)
+        vals = __versioninfo__, self.signer.generator
+        return "Manifest-Version: 1.0\nCreated-By: %s; %s\n" % vals
 
     @property
     def __signature_version(self):
-        return "Signature-Version: 1.0\nCreated-By: %s; %s\n" % (__versioninfo__, self.signer.generator)
-
+        vals = __versioninfo__, self.signer.generator
+        return "Signature-Version: 1.0\nCreated-By: %s; %s\n" % vals
 
     def __init__(self, signer, keyfile, algos=["MD5", "SHA1"]):
         self.signer = signer
@@ -154,7 +154,7 @@ def maybe_optimize_inner_archive(name, content):
     rv = BytesIO()
     with StreamPositionRestore(rv):
         with ZipFile(rv, "w", ZIP_STORED) as zp:
-            for i,c in files:
+            for i, c in files:
                 zp.writestr(i, c)
     return name, rv.read()
 
@@ -200,7 +200,7 @@ def xpisign(xpifile,
             return xpisign(zp,
                            keyfile,
                            outfile,
-                           optimize_signature,
+                           optimize_signatures,
                            optimize_compression,
                            signer
                            )
@@ -230,14 +230,13 @@ def xpisign(xpifile,
     if not signer:
         raise RuntimeError("Signing algorithm is not available on this system")
 
-
     # read file list and contents, skipping any existing meta files
     with StreamPositionRestore(xpifile):
         with ZipFile(xpifile, "r") as xp:
             files = [maybe_optimize_inner_archive(n, xp.read(n))
                      for n in sorted(xp.namelist(), key=file_key)
                      if not RE_META.match(n) and not RE_DIRECTORY.search(n)
-                 ]
+                     ]
 
     # generate all digests
     dkw = {"signer": signer,
@@ -267,4 +266,3 @@ def xpisign(xpifile,
                         zp.writestr(name, content, ZIP_DEFLATED)
 
     return outfile
-

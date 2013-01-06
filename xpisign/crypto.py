@@ -4,12 +4,13 @@ import os
 import re
 import warnings
 
-from .compat import BytesIO
-
-RE_KEY = re.compile(r"-----BEGIN ((ENCRYPTED|RSA) )?PRIVATE KEY-----.+?-----END ((ENCRYPTED|RSA) )?PRIVATE KEY-----", re.S)
-RE_CERTS = re.compile(r'-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----', re.S)
+RE_KEY = re.compile("-----BEGIN ((ENCRYPTED|RSA) )?PRIVATE KEY-----"
+                    ".+?-----END ((ENCRYPTED|RSA) )?PRIVATE KEY-----", re.S)
+RE_CERTS = re.compile("-----BEGIN CERTIFICATE-----"
+                      ".+?-----END CERTIFICATE-----", re.S)
 
 __all__ = ["sign_m2", "sign_openssl", "sign"]
+
 
 def parse_keyfile(keyfile):
     """
@@ -31,14 +32,12 @@ try:
     from tempfile import NamedTemporaryFile
     from functools import wraps
 
-
     try:
         check_output = subprocess.check_output
     except AttributeError:
         def check_output(*args, **kw):
             kw["stdout"] = subprocess.PIPE
             return subprocess.Popen(*args, **kw).communicate()[0]
-
 
     def find_executable(name):
         """
@@ -47,6 +46,7 @@ try:
         """
 
         is_windows = os.name != "nt"
+
         def check(path):
             return (os.path.isfile(path) and
                     (not is_windows or os.access(path, os.X_OK)))
@@ -67,7 +67,6 @@ try:
     openssl = find_executable("openssl")
     if not openssl:
         raise ImportError("Failed to find openssl executable")
-
 
     def sign_openssl(keyfile, content):
         """
@@ -96,10 +95,17 @@ try:
 
     @wraps(sign_openssl)
     def sign_openssl_warn(*args, **kw):
-        warnings.warn("Using openssl (%s) compatibilty layer due to lack of M2Crypto. This will produce slightly larger signatures, as the CA root certificate will be included." % (openssl,), RuntimeWarning)
+        warnings.warn("Using openssl (%s) compatibilty layer due to lack "
+                      "of M2Crypto. This will produce slightly larger "
+                      "signatures, as the CA root certificate will be "
+                      "included." % (openssl,),
+                      RuntimeWarning
+                      )
         return sign_openssl(*args, **kw)
 
-    sign_openssl_warn.generator = sign_openssl.generator = check_output((openssl, "version")).strip()
+    sign_openssl_warn.generator = \
+        sign_openssl.generator = \
+        check_output((openssl, "version")).strip()
 
 except ImportError:
     sign_openssl_warn = sign_openssl = None
@@ -110,7 +116,6 @@ try:
     import M2Crypto.X509 as M2X509
     from M2Crypto.BIO import MemoryBuffer as M2Buffer
     from M2Crypto.EVP import EVPError as M2EVPError
-
 
     def sign_m2(keyfile, content):
         """
@@ -125,7 +130,7 @@ try:
                 cert = M2X509.load_cert_string(c)
                 # skip the main CA cert, as this must be built-in anyway
                 if (cert.check_ca()
-                    and str(cert.get_issuer()) == str(cert.get_subject())):
+                        and str(cert.get_issuer()) == str(cert.get_subject())):
                     continue
                 stack.push(cert)
 
@@ -145,12 +150,12 @@ try:
                 raise ValueError("Key file does not contain a private key")
             raise ValueError("Signing failed. Wrong password?")
 
-    sign_m2.generator = "M2Crypto %s"  % M2.version
+    sign_m2.generator = "M2Crypto %s" % M2.version
 
 except ImportError:
     sign_m2 = None
 
 sign = sign_m2 or sign_openssl_warn
 if not sign:
-    raise ImportError("No signing implementation available! Either install M2Crypto or add openssl to your $PATH")
-
+    raise ImportError("No signing implementation available! Either install "
+                      "M2Crypto or add openssl to your $PATH")
