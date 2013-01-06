@@ -17,6 +17,9 @@ classifiers = ["Development Status :: 5 - Production/Stable",
 
 docstrings = xpisign.__doc__.split("\n")
 
+with open("requirements.txt") as rp:
+    requirements = [l.strip() for l in rp if not l.startswith("#")]
+
 setup(name="xpisign",
       version=xpisign.__version__,
 
@@ -31,6 +34,8 @@ setup(name="xpisign",
       platforms=["any"],
       scripts=["scripts/xpisign"],
       packages=["xpisign"],
+
+      install_requires=requirements,
 
       zip_safe=True,
 
