@@ -32,4 +32,6 @@ setup(name="xpisign",
       scripts=["scripts/xpisign"],
       packages=["xpisign"],
 
+      zip_safe=True,
+
       )
