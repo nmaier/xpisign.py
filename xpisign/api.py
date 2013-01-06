@@ -169,9 +169,8 @@ def xpisign(xpifile,
     '''
     Sign an XP-Install (XPI file)
 
-    xpifile and outfile might be either strings pointing to the corresponding
-    file or file-like-objects.
-    keyfile is expected to be a string containing a path.
+    xpifile, keyfile and outfile might be either strings pointing to the
+    corresponding file or file-like-objects.
 
     The file in question will be signed using the key as provided in key file.
 
@@ -195,25 +194,22 @@ def xpisign(xpifile,
     @return: signed result file name or buffer
     '''
 
+    kw = dict(optimize_signatures=optimize_signatures,
+              optimize_compression=optimize_compression,
+              signer=signer
+              )
+
     if isinstance(xpifile, basestring):
-        with open(xpifile, "rb") as zp:
-            return xpisign(zp,
-                           keyfile,
-                           outfile,
-                           optimize_signatures,
-                           optimize_compression,
-                           signer
-                           )
+        with open(xpifile, "rb") as xp:
+            return xpisign(xp, keyfile, outfile, **kw)
+
+    if isinstance(keyfile, basestring):
+        with open(keyfile, "rb") as kp:
+            return xpisign(xpifile, kp, outfile, **kw)
 
     if outfile and isinstance(outfile, basestring):
         with open(outfile, "wb") as op:
-            xpisign(zp,
-                    keyfile,
-                    op,
-                    optimize_signatures,
-                    optimize_compression,
-                    signer
-                    )
+            xpisign(xpifile, keyfile, op, **kw)
             return outfile
 
     if not outfile:

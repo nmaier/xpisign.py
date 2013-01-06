@@ -4,6 +4,8 @@ import os
 import re
 import warnings
 
+from .context import StreamPositionRestore
+
 RE_KEY = re.compile("-----BEGIN ((ENCRYPTED|RSA) )?PRIVATE KEY-----"
                     ".+?-----END ((ENCRYPTED|RSA) )?PRIVATE KEY-----", re.S)
 RE_CERTS = re.compile("-----BEGIN CERTIFICATE-----"
@@ -17,8 +19,8 @@ def parse_keyfile(keyfile):
     Parse a keyfile into private key, signing cert and CA stack
     """
 
-    with open(keyfile, "rb") as kf:
-        kf = kf.read()
+    with StreamPositionRestore(keyfile):
+        kf = keyfile.read()
         key = RE_KEY.search(kf)
         certs = RE_CERTS.finditer(kf)
         return (str(key.group(0)),
@@ -122,6 +124,17 @@ try:
         Sign content with a keyfile using M2Crypto
         """
 
+        # XXX kill once we can load the key directly from a buffer
+        if not hasattr(keyfile, "name"):
+            warnings.warn("Rewrapping keyfile into a temporary file. "
+                          "This may case the file to be written to insecure "
+                          "storage!")
+            with NamedTemporaryFile() as kp:
+                with StreamPositionRestore(kp):
+                    with StreamPositionRestore(keyfile):
+                        kp.write(keyfile.read())
+                return sign_m2(kp, content)
+
         try:
             # load intermediate certs if any
             stack = M2X509.X509_Stack()
@@ -136,7 +149,7 @@ try:
 
             # actual signing
             smime = M2S.SMIME()
-            smime.load_key(keyfile)
+            smime.load_key(keyfile.name)
             smime.set_x509_stack(stack)
 
             pkcs7 = M2Buffer()
