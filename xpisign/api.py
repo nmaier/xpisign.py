@@ -44,7 +44,7 @@ from .crypto import sign, sign_m2, sign_openssl
 
 
 __all__ = ["xpisign", "__version__"]
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 __website__ = "https://github.com/nmaier/xpisign.py"
 __versioninfo__ = "xpisign.py (version: %s; %s)" % (__version__, __website__)
 
